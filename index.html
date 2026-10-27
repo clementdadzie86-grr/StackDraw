@@ -281,6 +281,11 @@ body {
           <button class="btn tool active" data-tool="pencil" title="Pencil">✏ Pencil</button>
           <button class="btn tool" data-tool="rectangle" title="Rectangle">▢ Rectangle</button>
           <button class="btn tool" data-tool="circle" title="Circle">○ Circle</button>
+          <button class="btn tool" data-tool="oval" title="Oval">⬭ Oval</button>
+          <button class="btn tool" data-tool="diamond" title="Diamond">◇ Diamond</button>
+          <button class="btn tool" data-tool="triangle" title="Triangle">△ Triangle</button>
+          <button class="btn tool" data-tool="star" title="Star">☆ Star</button>
+          <button class="btn tool" data-tool="spiral" title="Spiral">🌀 Spiral</button>
         </div>
 
         <div class="tool-group">
@@ -313,7 +318,7 @@ body {
 
       <!-- Friendly messages -->
       <p id="message" class="message" aria-live="polite"></p>
-      <p class="hint">Pencil: drag to draw. Rectangle: drag from corner to corner. Circle: drag from the centre outwards.</p>
+      <p class="hint">Pencil: drag to draw. Rectangle, Oval, Diamond and Triangle: drag from corner to corner. Circle, Star and Spiral: drag from the centre outwards.</p>
     </section>
 
     <!-- ================= RIGHT: STACK PANELS ================= -->
@@ -588,21 +593,82 @@ function finishDrawing(event) {
   }
 
   drawShape(currentTool, startPoint, endPoint);
-  recordAction(currentTool === "rectangle" ? "Draw Rectangle" : "Draw Circle");
+  const shapeNames = {
+    rectangle: "Rectangle", circle: "Circle", oval: "Oval", diamond: "Diamond",
+    triangle: "Triangle", star: "Star", spiral: "Spiral"
+  };
+  recordAction("Draw " + shapeNames[currentTool]);
 }
 
 canvas.addEventListener("pointerup", finishDrawing);
 canvas.addEventListener("pointercancel", finishDrawing);
 
 function drawShape(tool, from, to) {
+  // Bounding box of the drag (used by the corner-to-corner shapes).
+  const left = Math.min(from.x, to.x);
+  const right = Math.max(from.x, to.x);
+  const top = Math.min(from.y, to.y);
+  const bottom = Math.max(from.y, to.y);
+  const midX = (left + right) / 2;
+  const midY = (top + bottom) / 2;
+
+  // Distance from the start point (used by the centre-outwards shapes).
+  const radius = Math.hypot(to.x - from.x, to.y - from.y);
+
   ctx.beginPath();
+
   if (tool === "rectangle") {
     ctx.rect(from.x, from.y, to.x - from.x, to.y - from.y);
+
   } else if (tool === "circle") {
     // Circle: centre is where the drag started, radius is the drag distance.
-    const radius = Math.hypot(to.x - from.x, to.y - from.y);
     ctx.arc(from.x, from.y, radius, 0, Math.PI * 2);
+
+  } else if (tool === "oval") {
+    // Oval: an ellipse that fits inside the dragged box.
+    ctx.ellipse(midX, midY, (right - left) / 2, (bottom - top) / 2, 0, 0, Math.PI * 2);
+
+  } else if (tool === "diamond") {
+    // Diamond: joins the middle of each side of the dragged box.
+    ctx.moveTo(midX, top);
+    ctx.lineTo(right, midY);
+    ctx.lineTo(midX, bottom);
+    ctx.lineTo(left, midY);
+    ctx.closePath();
+
+  } else if (tool === "triangle") {
+    // Triangle: point at the top middle, base along the bottom of the box.
+    ctx.moveTo(midX, top);
+    ctx.lineTo(right, bottom);
+    ctx.lineTo(left, bottom);
+    ctx.closePath();
+
+  } else if (tool === "star") {
+    // 5-point star: centre is the drag start, outer radius is the drag distance.
+    const points = 5;
+    const innerRadius = radius * 0.4;
+    for (let i = 0; i < points * 2; i++) {
+      const r = (i % 2 === 0) ? radius : innerRadius;
+      const angle = -Math.PI / 2 + (i * Math.PI) / points;
+      const x = from.x + Math.cos(angle) * r;
+      const y = from.y + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+
+  } else if (tool === "spiral") {
+    // Spiral: starts at the centre and winds outwards for 4 turns.
+    const turns = 4;
+    const steps = 240;
+    ctx.moveTo(from.x, from.y);
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const angle = t * turns * Math.PI * 2;
+      const r = t * radius;
+      ctx.lineTo(from.x + Math.cos(angle) * r, from.y + Math.sin(angle) * r);
+    }
   }
+
   ctx.stroke();
 }
 
