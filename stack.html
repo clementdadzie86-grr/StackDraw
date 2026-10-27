@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StackDraw - Drawing Application with Stack-Based Undo</title>
+  <style>
+/* =========================================================
+   StackDraw - styles
+   ========================================================= */
+
+:root {
+  --bg: #f3f4f8;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --primary: #4f46e5;
+  --primary-dark: #4338ca;
+  --primary-soft: #eef2ff;
+  --danger: #dc2626;
+  --success: #059669;
+  --warning: #d97706;
+  --border: #e5e7eb;
+  --radius: 14px;
+  --shadow: 0 4px 14px rgba(31, 41, 55, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ---------- Header ---------- */
+.header {
+  text-align: center;
+  padding: 32px 16px 20px;
+}
+.header h1 {
+  margin: 0;
+  font-size: 2.4rem;
+  letter-spacing: 0.5px;
+  color: var(--primary);
+}
+.subtitle { margin: 4px 0 0; font-size: 1.15rem; font-weight: 600; }
+.tagline  { margin: 4px 0 0; color: var(--muted); }
+
+/* ---------- Layout ---------- */
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+.side { display: flex; flex-direction: column; gap: 20px; }
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+.card h2 { margin: 0 0 12px; font-size: 1.1rem; }
+.card-head { display: flex; justify-content: space-between; align-items: center; }
+.card-head h2 { margin-bottom: 12px; }
+
+/* ---------- Toolbar ---------- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 14px;
+}
+.tool-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.btn {
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn:hover { background: var(--primary-soft); border-color: var(--primary); }
+.btn:active { transform: scale(0.97); }
+.btn.tool.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.btn.undo { border-color: var(--warning); color: var(--warning); }
+.btn.undo:hover { background: #fffbeb; }
+.btn.redo { border-color: var(--success); color: var(--success); }
+.btn.redo:hover { background: #ecfdf5; }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
+.btn.danger:hover { background: #fef2f2; }
+.btn.small { padding: 4px 12px; font-size: 0.8rem; margin-bottom: 12px; }
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.control input[type="color"] {
+  width: 38px; height: 34px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.control select {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* ---------- Canvas ---------- */
+.canvas-wrap {
+  border: 2px solid var(--primary);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  line-height: 0;
+}
+#drawingCanvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #fff;
+  cursor: crosshair;
+  touch-action: none;   /* lets touch drawing work without scrolling the page */
+}
+
+.message {
+  min-height: 1.5em;
+  margin: 10px 0 0;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.message.info    { color: var(--primary); }
+.message.warning { color: var(--warning); }
+.message.success { color: var(--success); }
+.hint { margin: 4px 0 0; font-size: 0.82rem; color: var(--muted); }
+
+/* ---------- Stack visualisation ---------- */
+.stack-box {
+  background: #f9fafb;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.stack-view {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.stack-item {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
+.stack-item .num { color: var(--muted); font-size: 0.78rem; }
+.stack-item.top {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  font-weight: 700;
+}
+.stack-item.top::before {
+  content: "TOP →";
+  position: absolute;
+  left: -2px; top: -9px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+.stack-item.enter { animation: slideIn 0.3s ease; }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stack-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 22px 0;
+  font-style: italic;
+}
+.stack-bottom {
+  margin-top: 8px;
+  border-top: 3px solid var(--text);
+  padding-top: 4px;
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+
+/* ---------- Info panel ---------- */
+.info { margin: 0; }
+.info div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.info div:last-child { border-bottom: none; }
+.info dt { color: var(--muted); font-size: 0.9rem; }
+.info dd { margin: 0; font-weight: 700; text-align: right; }
+
+/* ---------- Activity log ---------- */
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.88rem;
+}
+.log li {
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  background: #f9fafb;
+  animation: slideIn 0.25s ease;
+}
+.log li.push  { border-left: 3px solid var(--primary); }
+.log li.pop   { border-left: 3px solid var(--warning); }
+.log li.redo  { border-left: 3px solid var(--success); }
+.log li.peek  { border-left: 3px solid #0891b2; }
+.log li.info  { border-left: 3px solid var(--border); color: var(--muted); }
+
+/* ---------- Explanation ---------- */
+.explain { max-width: 1248px; margin: 20px auto 0; }
+.explain p { margin: 0 0 14px; }
+.ops {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.op {
+  background: var(--primary-soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.op h3 { margin: 0 0 4px; font-size: 0.95rem; color: var(--primary-dark); }
+.op p  { margin: 0; font-size: 0.9rem; }
+.note  { color: var(--muted); }
+
+.footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 24px 16px 32px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .explain { margin: 20px 16px 0; }
+}
+@media (max-width: 600px) {
+  .header h1 { font-size: 1.9rem; }
+  .card { padding: 14px; }
+  .btn { padding: 8px 10px; font-size: 0.85rem; }
+}
+
+  </style>
+</head>
+<body>
+
+  <!-- ================= HEADER ================= -->
+  <header class="header">
+    <h1>StackDraw</h1>
+    <p class="subtitle">Drawing Application with Stack-Based Undo</p>
+    <p class="tagline">Demonstrating the LIFO principle using a Stack data structure.</p>
+  </header>
+
+  <main class="layout">
+
+    <!-- ================= LEFT: TOOLBAR + CANVAS ================= -->
+    <section class="card drawing-card">
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="tool-group">
+          <button class="btn tool active" data-tool="pencil" title="Pencil">✏ Pencil</button>
+          <button class="btn tool" data-tool="rectangle" title="Rectangle">▢ Rectangle</button>
+          <button class="btn tool" data-tool="circle" title="Circle">○ Circle</button>
+        </div>
+
+        <div class="tool-group">
+          <label class="control" title="Colour">
+            Colour
+            <input type="color" id="colorPicker" value="#4f46e5">
+          </label>
+          <label class="control" title="Brush size">
+            Size
+            <select id="sizePicker">
+              <option value="2">Thin</option>
+              <option value="4" selected>Medium</option>
+              <option value="8">Thick</option>
+              <option value="14">Extra thick</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="tool-group">
+          <button class="btn action undo" id="undoBtn" title="Undo (Ctrl+Z)">↶ Undo</button>
+          <button class="btn action redo" id="redoBtn" title="Redo (Ctrl+Y)">↷ Redo</button>
+          <button class="btn action danger" id="clearBtn" title="Clear canvas">🗑 Clear</button>
+        </div>
+      </div>
+
+      <!-- Canvas -->
+      <div class="canvas-wrap">
+        <canvas id="drawingCanvas" width="900" height="540"></canvas>
+      </div>
+
+      <!-- Friendly messages -->
+      <p id="message" class="message" aria-live="polite"></p>
+      <p class="hint">Pencil: drag to draw. Rectangle: drag from corner to corner. Circle: drag from the centre outwards.</p>
+    </section>
+
+    <!-- ================= RIGHT: STACK PANELS ================= -->
+    <aside class="side">
+
+      <!-- Stack visualisation -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Undo Stack</h2>
+          <button class="btn small" id="peekBtn" title="Look at the top element without removing it">PEEK</button>
+        </div>
+        <div class="stack-box">
+          <div id="stackView" class="stack-view"></div>
+          <div class="stack-bottom">BOTTOM</div>
+        </div>
+      </section>
+
+      <!-- Stack information -->
+      <section class="card">
+        <h2>Stack Information</h2>
+        <dl class="info">
+          <div><dt>Stack Size</dt><dd id="infoSize">0</dd></div>
+          <div><dt>Top Element</dt><dd id="infoTop">None</dd></div>
+          <div><dt>Status</dt><dd id="infoStatus">Stack is empty</dd></div>
+          <div><dt>Redo Stack Size</dt><dd id="infoRedo">0</dd></div>
+        </dl>
+      </section>
+
+      <!-- Activity log -->
+      <section class="card">
+        <h2>Activity Log</h2>
+        <ul id="activityLog" class="log"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ================= EDUCATIONAL SECTION ================= -->
+  <section class="card explain">
+    <h2>How the Stack Works</h2>
+    <p>
+      A stack follows the <strong>LIFO (Last In, First Out)</strong> principle. In this drawing
+      application, every drawing action is stored in a stack. When the user clicks Undo, the most
+      recent drawing action is removed first using the pop operation. This allows the application to
+      reverse drawing actions in the correct order.
+    </p>
+    <div class="ops">
+      <div class="op"><h3>PUSH</h3><p>Adds a drawing action to the top of the stack.</p></div>
+      <div class="op"><h3>POP</h3><p>Removes the most recent drawing action.</p></div>
+      <div class="op"><h3>PEEK</h3><p>Views the action currently at the top of the stack.</p></div>
+      <div class="op"><h3>isEmpty</h3><p>Checks whether the stack contains any actions.</p></div>
+      <div class="op"><h3>SIZE</h3><p>Returns the number of actions stored in the stack.</p></div>
+    </div>
+    <p class="note">
+      <strong>Redo</strong> uses a second stack. Undo pops from the Undo Stack and pushes onto the
+      Redo Stack; Redo does the opposite.
+    </p>
+  </section>
+
+  <footer class="footer">StackDraw · Data Structures Assignment · HTML, CSS and Vanilla JavaScript</footer>
+
+  <script>
+/* =========================================================
+   StackDraw - Drawing Application with Stack-Based Undo
+   =========================================================
+
+   HOW IT WORKS (summary)
+   - Every time the user finishes a drawing action, a snapshot of the
+     canvas (canvas.toDataURL) is PUSHED onto undoStack.
+   - UNDO  : POP the top action from undoStack, PUSH it onto redoStack,
+             then restore the canvas to the action that is now on top
+             (or a blank canvas if the stack is empty).
+   - REDO  : POP from redoStack, PUSH back onto undoStack, restore it.
+   - The "Undo Stack" shown on the page is drawn directly from undoStack,
+     so what you see is exactly what the program holds in memory.
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   1. THE STACK DATA STRUCTURE
+   --------------------------------------------------------- */
+class Stack {
+  constructor() {
+    // An array is used for storage. The END of the array is the TOP of the stack.
+    this.items = [];
+  }
+
+  // PUSH: add an element to the TOP of the stack.
+  push(element) {
+    this.items.push(element);
+  }
+
+  // POP: remove and return the TOP element (the most recent one).
+  // Returns null if the stack is empty, so the program never crashes.
+  pop() {
+    if (this.isEmpty()) {
+      return null;
+    }
+    return this.items.pop();
+  }
+
+  // PEEK: look at the TOP element WITHOUT removing it.
+  peek() {
+    if (this.isEmpty()) {
+      return null;
+    }
+    return this.items[this.items.length - 1];
+  }
+
+  // isEmpty: true when there is nothing in the stack.
+  isEmpty() {
+    return this.items.length === 0;
+  }
+
+  // size: how many elements are in the stack.
+  size() {
+    return this.items.length;
+  }
+
+  // Helper used ONLY for displaying the stack on screen (does not change it).
+  toArray() {
+    return this.items.slice();
+  }
+}
+
+
+/* ---------------------------------------------------------
+   2. PAGE ELEMENTS AND APPLICATION STATE
+   --------------------------------------------------------- */
+const canvas = document.getElementById("drawingCanvas");
+const ctx = canvas.getContext("2d");
+
+const colorPicker = document.getElementById("colorPicker");
+const sizePicker = document.getElementById("sizePicker");
+const undoBtn = document.getElementById("undoBtn");
+const redoBtn = document.getElementById("redoBtn");
+const clearBtn = document.getElementById("clearBtn");
+const peekBtn = document.getElementById("peekBtn");
+const toolButtons = document.querySelectorAll(".tool");
+
+const stackView = document.getElementById("stackView");
+const infoSize = document.getElementById("infoSize");
+const infoTop = document.getElementById("infoTop");
+const infoStatus = document.getElementById("infoStatus");
+const infoRedo = document.getElementById("infoRedo");
+const activityLog = document.getElementById("activityLog");
+const messageBox = document.getElementById("message");
+
+// The two stacks. Each element is an object: { id, label, snapshot }
+//   id       - number of the action (1, 2, 3 ...)
+//   label    - text such as "Draw Circle"
+//   snapshot - canvas.toDataURL() taken right AFTER the action
+const undoStack = new Stack();
+const redoStack = new Stack();
+
+let currentTool = "pencil"; // currentAction: which tool is selected
+let isDrawing = false;      // true while the mouse/finger is held down
+let startPoint = { x: 0, y: 0 };
+let imageBeforeAction = null; // canvas pixels before the current action starts
+let actionCounter = 0;        // gives every action a number
+let restoreToken = 0;         // protects against out-of-order image loading
+
+// Fill the canvas with white and remember what a blank canvas looks like.
+fillWhite();
+const blankCanvasState = canvas.toDataURL();
+
+
+/* ---------------------------------------------------------
+   3. CANVAS STATE MANAGEMENT
+   --------------------------------------------------------- */
+function fillWhite() {
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+// Restore the canvas from a saved snapshot (a data URL string).
+function restoreCanvas(dataURL) {
+  restoreToken++;                 // cancel any older restore still loading
+  const myToken = restoreToken;
+
+  if (dataURL === blankCanvasState) {
+    fillWhite();                  // blank canvas - no image needed
+    return;
+  }
+
+  const img = new Image();
+  img.onload = function () {
+    if (myToken !== restoreToken) return; // a newer restore replaced this one
+    fillWhite();
+    ctx.drawImage(img, 0, 0);
+  };
+  img.src = dataURL;
+}
+
+// Convert a mouse/touch position into canvas coordinates.
+// The canvas is scaled by CSS, so we correct for that. Positions are
+// clamped so drawing "outside" the canvas stays safely on the edge.
+function getPoint(event) {
+  const rect = canvas.getBoundingClientRect();
+  let x = (event.clientX - rect.left) * (canvas.width / rect.width);
+  let y = (event.clientY - rect.top) * (canvas.height / rect.height);
+  x = Math.max(0, Math.min(canvas.width, x));
+  y = Math.max(0, Math.min(canvas.height, y));
+  return { x: x, y: y };
+}
+
+
+/* ---------------------------------------------------------
+   4. PUSH: RECORD A FINISHED DRAWING ACTION
+   --------------------------------------------------------- */
+function recordAction(label) {
+  actionCounter++;
+
+  const action = {
+    id: actionCounter,
+    label: label,
+    snapshot: canvas.toDataURL() // canvas state AFTER this action
+  };
+
+  // PUSH operation: the new action goes on the TOP of the undo stack.
+  undoStack.push(action);
+
+  // A brand-new action makes the old "redo" history invalid, so empty it.
+  let clearedRedo = false;
+  if (!redoStack.isEmpty()) {
+    redoStack.items = [];
+    clearedRedo = true;
+  }
+
+  addLog("push", "✓ PUSH: " + label + " (#" + action.id + ")");
+  if (clearedRedo) {
+    addLog("info", "Redo stack cleared because a new action was pushed.");
+  }
+  refreshUI(true);
+}
+
+
+/* ---------------------------------------------------------
+   5. DRAWING (pencil, rectangle, circle)
+   Pointer events handle mouse, touch and pen with the same code.
+   --------------------------------------------------------- */
+canvas.addEventListener("pointerdown", function (event) {
+  if (event.pointerType === "mouse" && event.button !== 0) return; // left button only
+
+  isDrawing = true;
+  canvas.setPointerCapture(event.pointerId); // keep receiving events outside the canvas
+  startPoint = getPoint(event);
+
+  // Save the pixels so shapes can be previewed while dragging.
+  imageBeforeAction = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = colorPicker.value;
+  ctx.lineWidth = Number(sizePicker.value);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (currentTool === "pencil") {
+    // Start the line (a single click leaves a dot).
+    ctx.beginPath();
+    ctx.moveTo(startPoint.x, startPoint.y);
+    ctx.lineTo(startPoint.x, startPoint.y);
+    ctx.stroke();
+  }
+});
+
+canvas.addEventListener("pointermove", function (event) {
+  if (!isDrawing) return;
+  const point = getPoint(event);
+
+  if (currentTool === "pencil") {
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+  } else {
+    // Shapes: restore the old picture, then draw the preview shape on top.
+    ctx.putImageData(imageBeforeAction, 0, 0);
+    drawShape(currentTool, startPoint, point);
+  }
+});
+
+function finishDrawing(event) {
+  if (!isDrawing) return;
+  isDrawing = false;
+  const endPoint = getPoint(event);
+
+  if (currentTool === "pencil") {
+    recordAction("Draw Pencil");
+    return;
+  }
+
+  // Shapes
+  ctx.putImageData(imageBeforeAction, 0, 0);
+  const width = Math.abs(endPoint.x - startPoint.x);
+  const height = Math.abs(endPoint.y - startPoint.y);
+
+  if (width < 3 && height < 3) {
+    // Just a click with no drag - nothing was drawn, so nothing is pushed.
+    showMessage("Drag on the canvas to draw a shape.", "info");
+    return;
+  }
+
+  drawShape(currentTool, startPoint, endPoint);
+  recordAction(currentTool === "rectangle" ? "Draw Rectangle" : "Draw Circle");
+}
+
+canvas.addEventListener("pointerup", finishDrawing);
+canvas.addEventListener("pointercancel", finishDrawing);
+
+function drawShape(tool, from, to) {
+  ctx.beginPath();
+  if (tool === "rectangle") {
+    ctx.rect(from.x, from.y, to.x - from.x, to.y - from.y);
+  } else if (tool === "circle") {
+    // Circle: centre is where the drag started, radius is the drag distance.
+    const radius = Math.hypot(to.x - from.x, to.y - from.y);
+    ctx.arc(from.x, from.y, radius, 0, Math.PI * 2);
+  }
+  ctx.stroke();
+}
+
+
+/* ---------------------------------------------------------
+   6. UNDO LOGIC (uses POP)
+   --------------------------------------------------------- */
+function undo() {
+  // Check isEmpty() first so we never pop from an empty stack.
+  if (undoStack.isEmpty()) {
+    showMessage("No actions available to undo.", "warning");
+    addLog("info", "Undo ignored: the stack is empty.");
+    return;
+  }
+
+  // POP operation: remove the MOST RECENT action (LIFO).
+  const removedAction = undoStack.pop();
+
+  // Keep the removed action on the redo stack so it can be brought back.
+  redoStack.push(removedAction);
+
+  // Restore the canvas to how it looked BEFORE the removed action:
+  // that is the new TOP of the undo stack (peek), or a blank canvas.
+  const previousAction = undoStack.peek();
+  restoreCanvas(previousAction ? previousAction.snapshot : blankCanvasState);
+
+  addLog("pop", "↶ POP: " + removedAction.label + " (#" + removedAction.id + ")");
+  showMessage("Undid: " + removedAction.label, "info");
+  refreshUI(false);
+}
+
+
+/* ---------------------------------------------------------
+   7. REDO LOGIC (a second stack)
+   --------------------------------------------------------- */
+function redo() {
+  if (redoStack.isEmpty()) {
+    showMessage("No actions available to redo.", "warning");
+    addLog("info", "Redo ignored: the redo stack is empty.");
+    return;
+  }
+
+  // POP from the redo stack...
+  const restoredAction = redoStack.pop();
+
+  // ...and PUSH it back onto the undo stack.
+  undoStack.push(restoredAction);
+  restoreCanvas(restoredAction.snapshot);
+
+  addLog("redo", "↷ REDO: " + restoredAction.label + " (#" + restoredAction.id + ") pushed back");
+  showMessage("Redid: " + restoredAction.label, "success");
+  refreshUI(true);
+}
+
+
+/* ---------------------------------------------------------
+   8. CLEAR (also an action, so it can be undone)
+   --------------------------------------------------------- */
+function clearCanvas() {
+  fillWhite();
+  restoreToken++; // cancel any pending image restore
+  recordAction("Clear Canvas"); // pushes a blank-canvas snapshot
+  showMessage("Canvas cleared. You can still Undo this.", "info");
+}
+
+
+/* ---------------------------------------------------------
+   9. PEEK (look at the top without removing it)
+   --------------------------------------------------------- */
+function peekTop() {
+  const top = undoStack.peek();
+  if (top === null) {
+    addLog("peek", "PEEK: stack is empty, there is no top element.");
+    showMessage("The stack is empty.", "warning");
+  } else {
+    addLog("peek", "PEEK: top is " + top.label + " (#" + top.id + ")");
+    showMessage("Top of stack: " + top.label, "info");
+  }
+}
+
+
+/* ---------------------------------------------------------
+   10. USER INTERFACE UPDATES
+   --------------------------------------------------------- */
+
+// Redraw the stack panel straight from undoStack.
+function refreshUI(animateTop) {
+  renderStack(animateTop);
+
+  // Stack Information panel (uses size, peek and isEmpty)
+  infoSize.textContent = undoStack.size();
+  infoRedo.textContent = redoStack.size();
+
+  const top = undoStack.peek();
+  infoTop.textContent = top ? top.label : "None";
+  infoStatus.textContent = undoStack.isEmpty()
+    ? "Stack is empty"
+    : "Stack contains drawing actions";
+}
+
+function renderStack(animateTop) {
+  stackView.innerHTML = "";
+
+  if (undoStack.isEmpty()) {
+    const empty = document.createElement("div");
+    empty.className = "stack-empty";
+    empty.textContent = "Stack is empty";
+    stackView.appendChild(empty);
+    return;
+  }
+
+  // The array ends with the TOP, so reverse it to show TOP first.
+  const itemsTopFirst = undoStack.toArray().reverse();
+
+  itemsTopFirst.forEach(function (action, index) {
+    const row = document.createElement("div");
+    row.className = "stack-item";
+    if (index === 0) {
+      row.classList.add("top");
+      if (animateTop) row.classList.add("enter");
+    }
+
+    const name = document.createElement("span");
+    name.textContent = action.label;
+    const num = document.createElement("span");
+    num.className = "num";
+    num.textContent = "#" + action.id;
+
+    row.appendChild(name);
+    row.appendChild(num);
+    stackView.appendChild(row);
+  });
+}
+
+// Add a line to the Activity Log (newest at the top).
+function addLog(type, text) {
+  const li = document.createElement("li");
+  li.className = type;
+  li.textContent = text;
+  activityLog.insertBefore(li, activityLog.firstChild);
+
+  // Keep the log short.
+  while (activityLog.children.length > 40) {
+    activityLog.removeChild(activityLog.lastChild);
+  }
+}
+
+// Show a short friendly message under the canvas.
+let messageTimer = null;
+function showMessage(text, type) {
+  messageBox.textContent = text;
+  messageBox.className = "message " + type;
+  clearTimeout(messageTimer);
+  messageTimer = setTimeout(function () {
+    messageBox.textContent = "";
+  }, 3000);
+}
+
+
+/* ---------------------------------------------------------
+   11. BUTTONS AND KEYBOARD
+   --------------------------------------------------------- */
+toolButtons.forEach(function (button) {
+  button.addEventListener("click", function () {
+    currentTool = button.dataset.tool;
+    toolButtons.forEach(function (b) { b.classList.remove("active"); });
+    button.classList.add("active");
+  });
+});
+
+undoBtn.addEventListener("click", undo);
+redoBtn.addEventListener("click", redo);
+clearBtn.addEventListener("click", clearCanvas);
+peekBtn.addEventListener("click", peekTop);
+
+// Optional shortcuts: Ctrl+Z = undo, Ctrl+Y = redo.
+document.addEventListener("keydown", function (event) {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  const key = event.key.toLowerCase();
+  if (key === "z") { event.preventDefault(); undo(); }
+  if (key === "y") { event.preventDefault(); redo(); }
+});
+
+
+/* ---------------------------------------------------------
+   12. START
+   --------------------------------------------------------- */
+addLog("info", "Application ready. Draw something to PUSH an action.");
+refreshUI(false);
+
+  </script>
+</body>
+</html>
