@@ -286,6 +286,12 @@ body {
           <button class="btn tool" data-tool="triangle" title="Triangle">△ Triangle</button>
           <button class="btn tool" data-tool="star" title="Star">☆ Star</button>
           <button class="btn tool" data-tool="spiral" title="Spiral">🌀 Spiral</button>
+          <button class="btn tool" data-tool="line" title="Line">╱ Line</button>
+          <button class="btn tool" data-tool="arrow" title="Arrow">➜ Arrow</button>
+          <button class="btn tool" data-tool="pentagon" title="Pentagon">⬠ Pentagon</button>
+          <button class="btn tool" data-tool="hexagon" title="Hexagon">⬡ Hexagon</button>
+          <button class="btn tool" data-tool="heart" title="Heart">♡ Heart</button>
+          <button class="btn tool" data-tool="cross" title="Cross">✚ Cross</button>
         </div>
 
         <div class="tool-group">
@@ -318,7 +324,7 @@ body {
 
       <!-- Friendly messages -->
       <p id="message" class="message" aria-live="polite"></p>
-      <p class="hint">Pencil: drag to draw. Rectangle, Oval, Diamond and Triangle: drag from corner to corner. Circle, Star and Spiral: drag from the centre outwards.</p>
+      <p class="hint">Pencil: drag to draw. Line and Arrow: drag from start to end. Rectangle, Oval, Diamond, Triangle, Heart and Cross: drag from corner to corner. Circle, Star, Pentagon, Hexagon and Spiral: drag from the centre outwards.</p>
     </section>
 
     <!-- ================= RIGHT: STACK PANELS ================= -->
@@ -595,7 +601,9 @@ function finishDrawing(event) {
   drawShape(currentTool, startPoint, endPoint);
   const shapeNames = {
     rectangle: "Rectangle", circle: "Circle", oval: "Oval", diamond: "Diamond",
-    triangle: "Triangle", star: "Star", spiral: "Spiral"
+    triangle: "Triangle", star: "Star", spiral: "Spiral",
+    line: "Line", arrow: "Arrow", pentagon: "Pentagon", hexagon: "Hexagon",
+    heart: "Heart", cross: "Cross"
   };
   recordAction("Draw " + shapeNames[currentTool]);
 }
@@ -667,6 +675,64 @@ function drawShape(tool, from, to) {
       const r = t * radius;
       ctx.lineTo(from.x + Math.cos(angle) * r, from.y + Math.sin(angle) * r);
     }
+
+  } else if (tool === "line") {
+    // Line: straight from where the drag started to where it ended.
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+
+  } else if (tool === "arrow") {
+    // Arrow: a line with an open arrow head at the end of the drag.
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const headLength = Math.max(12, Math.min(radius * 0.3, 60));
+    const spread = Math.PI / 6; // 30 degrees each side
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.moveTo(to.x - headLength * Math.cos(angle - spread), to.y - headLength * Math.sin(angle - spread));
+    ctx.lineTo(to.x, to.y);
+    ctx.lineTo(to.x - headLength * Math.cos(angle + spread), to.y - headLength * Math.sin(angle + spread));
+
+  } else if (tool === "pentagon" || tool === "hexagon") {
+    // Regular polygon: centre is the drag start, radius is the drag distance.
+    const sides = (tool === "pentagon") ? 5 : 6;
+    for (let i = 0; i < sides; i++) {
+      const angle = -Math.PI / 2 + (i * 2 * Math.PI) / sides;
+      const x = from.x + Math.cos(angle) * radius;
+      const y = from.y + Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+
+  } else if (tool === "heart") {
+    // Heart: two curved lobes meeting in a point, fitted to the dragged box.
+    const w = right - left;
+    const h = bottom - top;
+    ctx.moveTo(midX, top + h * 0.25);
+    ctx.bezierCurveTo(midX, top, left, top, left, top + h * 0.3);
+    ctx.bezierCurveTo(left, top + h * 0.6, midX, top + h * 0.8, midX, bottom);
+    ctx.bezierCurveTo(midX, top + h * 0.8, right, top + h * 0.6, right, top + h * 0.3);
+    ctx.bezierCurveTo(right, top, midX, top, midX, top + h * 0.25);
+    ctx.closePath();
+
+  } else if (tool === "cross") {
+    // Cross (plus sign): arms are one third of the dragged box.
+    const x2 = left + (right - left) / 3;
+    const x3 = left + (right - left) * 2 / 3;
+    const y2 = top + (bottom - top) / 3;
+    const y3 = top + (bottom - top) * 2 / 3;
+    ctx.moveTo(x2, top);
+    ctx.lineTo(x3, top);
+    ctx.lineTo(x3, y2);
+    ctx.lineTo(right, y2);
+    ctx.lineTo(right, y3);
+    ctx.lineTo(x3, y3);
+    ctx.lineTo(x3, bottom);
+    ctx.lineTo(x2, bottom);
+    ctx.lineTo(x2, y3);
+    ctx.lineTo(left, y3);
+    ctx.lineTo(left, y2);
+    ctx.lineTo(x2, y2);
+    ctx.closePath();
   }
 
   ctx.stroke();
