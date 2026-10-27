@@ -236,28 +236,6 @@ body {
 .info dt { color: var(--muted); font-size: 0.9rem; }
 .info dd { margin: 0; font-weight: 700; text-align: right; }
 
-/* ---------- Activity log ---------- */
-.log {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 220px;
-  overflow-y: auto;
-  font-size: 0.88rem;
-}
-.log li {
-  padding: 6px 8px;
-  border-radius: 6px;
-  margin-bottom: 4px;
-  background: #f9fafb;
-  animation: slideIn 0.25s ease;
-}
-.log li.push  { border-left: 3px solid var(--primary); }
-.log li.pop   { border-left: 3px solid var(--warning); }
-.log li.redo  { border-left: 3px solid var(--success); }
-.log li.peek  { border-left: 3px solid #0891b2; }
-.log li.info  { border-left: 3px solid var(--border); color: var(--muted); }
-
 /* ---------- Explanation ---------- */
 .explain { max-width: 1248px; margin: 20px auto 0; }
 .explain p { margin: 0 0 14px; }
@@ -377,11 +355,6 @@ body {
         </dl>
       </section>
 
-      <!-- Activity log -->
-      <section class="card">
-        <h2>Activity Log</h2>
-        <ul id="activityLog" class="log"></ul>
-      </section>
     </aside>
   </main>
 
@@ -493,7 +466,6 @@ const infoSize = document.getElementById("infoSize");
 const infoTop = document.getElementById("infoTop");
 const infoStatus = document.getElementById("infoStatus");
 const infoRedo = document.getElementById("infoRedo");
-const activityLog = document.getElementById("activityLog");
 const messageBox = document.getElementById("message");
 
 // The two stacks. Each element is an object: { id, label, snapshot }
@@ -571,16 +543,10 @@ function recordAction(label) {
   undoStack.push(action);
 
   // A brand-new action makes the old "redo" history invalid, so empty it.
-  let clearedRedo = false;
   if (!redoStack.isEmpty()) {
     redoStack.items = [];
-    clearedRedo = true;
   }
 
-  addLog("push", "✓ PUSH: " + label + " (#" + action.id + ")");
-  if (clearedRedo) {
-    addLog("info", "Redo stack cleared because a new action was pushed.");
-  }
   refreshUI(true);
 }
 
@@ -675,7 +641,6 @@ function undo() {
   // Check isEmpty() first so we never pop from an empty stack.
   if (undoStack.isEmpty()) {
     showMessage("No actions available to undo.", "warning");
-    addLog("info", "Undo ignored: the stack is empty.");
     return;
   }
 
@@ -690,7 +655,6 @@ function undo() {
   const previousAction = undoStack.peek();
   restoreCanvas(previousAction ? previousAction.snapshot : blankCanvasState);
 
-  addLog("pop", "↶ POP: " + removedAction.label + " (#" + removedAction.id + ")");
   showMessage("Undid: " + removedAction.label, "info");
   refreshUI(false);
 }
@@ -702,7 +666,6 @@ function undo() {
 function redo() {
   if (redoStack.isEmpty()) {
     showMessage("No actions available to redo.", "warning");
-    addLog("info", "Redo ignored: the redo stack is empty.");
     return;
   }
 
@@ -713,7 +676,6 @@ function redo() {
   undoStack.push(restoredAction);
   restoreCanvas(restoredAction.snapshot);
 
-  addLog("redo", "↷ REDO: " + restoredAction.label + " (#" + restoredAction.id + ") pushed back");
   showMessage("Redid: " + restoredAction.label, "success");
   refreshUI(true);
 }
@@ -736,10 +698,8 @@ function clearCanvas() {
 function peekTop() {
   const top = undoStack.peek();
   if (top === null) {
-    addLog("peek", "PEEK: stack is empty, there is no top element.");
     showMessage("The stack is empty.", "warning");
   } else {
-    addLog("peek", "PEEK: top is " + top.label + " (#" + top.id + ")");
     showMessage("Top of stack: " + top.label, "info");
   }
 }
@@ -798,19 +758,6 @@ function renderStack(animateTop) {
   });
 }
 
-// Add a line to the Activity Log (newest at the top).
-function addLog(type, text) {
-  const li = document.createElement("li");
-  li.className = type;
-  li.textContent = text;
-  activityLog.insertBefore(li, activityLog.firstChild);
-
-  // Keep the log short.
-  while (activityLog.children.length > 40) {
-    activityLog.removeChild(activityLog.lastChild);
-  }
-}
-
 // Show a short friendly message under the canvas.
 let messageTimer = null;
 function showMessage(text, type) {
@@ -851,7 +798,6 @@ document.addEventListener("keydown", function (event) {
 /* ---------------------------------------------------------
    12. START
    --------------------------------------------------------- */
-addLog("info", "Application ready. Draw something to PUSH an action.");
 refreshUI(false);
 
   </script>
